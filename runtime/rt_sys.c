@@ -143,7 +143,10 @@ static void vga_flip(void) {
 static int kb_hold(void) {
     if (no_vsync) return 0;
     double since = now_s() - flip_end_t;
-    return since < frame_work * 0.5 && since < 1.0 / 70;
+    // Держим keyboard IRQ примерно 6 мс после flip.
+    // За это время меню успевает вызвать kbhit() в начале цикла,
+    // а проверка Enter/стрелок ещё видит нажатую клавишу.
+    return since < 0.006;
 }
 
 static inline int chain4(void) { return (seq[4] & 0x08) != 0; }
