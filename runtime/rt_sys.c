@@ -622,11 +622,37 @@ void rt_int(int n) {
         if ((EAX & 0xffff) == 0x1686) { SETAX(0); return; }   // in protected mode
         if ((EAX & 0xffff) == 0x1500 || (EAX & 0xffff) == 0x150b || (EAX & 0xffff) == 0x150c) { cd_int2f(&EAX, &EBX, &ECX, &EDX, 0); return; }
         LOG("int2f %04x\n", EAX & 0xffff); return;
-    case 0x16:
-        if (AH == 0x01 || AH == 0x11) { set_zf(1); return; }
-        if (AH == 0x00 || AH == 0x10) { SETAX(0x1c0d); return; }
-        if (AH == 0x02) { SETAL(0); return; }
+    case 0x16: {
+        // BIOS keyboard via our scancode queue
+        if (AH == 0x01 || AH == 0x11) {          // key available?
+            if (kbq_r == kbq_w) { set_zf(1); return; }
+            set_zf(0);
+            // peek
+            uint8_t sc = kbq[kbq_r];
+            // rough ASCII/AX for common keys
+            if (sc == 0x1c) SETAX(0x1c0d);       // Enter
+            else if (sc == 0x01) SETAX(0x011b);  // Esc
+            else if (sc == 0x15) SETAX(0x1579);  // Y
+            else if (sc == 0x31) SETAX(0x316e);  // N
+            else SETAX((uint16_t)sc << 8);
+            return;
+        }
+        if (AH == 0x00 || AH == 0x10) {          // blocking read
+            // if empty, just return "no useful key" for now (non-blocking fallback)
+            if (kbq_r == kbq_w) { SETAX(0); return; }
+            uint8_t sc = kbq[kbq_r];
+            kbq_r = (kbq_r + 1) & (KBQ - 1);
+            kb_last = sc;
+            if (sc == 0x1c) SETAX(0x1c0d);
+            else if (sc == 0x01) SETAX(0x011b);
+            else if (sc == 0x15) SETAX(0x1579);  // Y
+            else if (sc == 0x31) SETAX(0x316e);  // N
+            else SETAX((uint16_t)sc << 8);
+            return;
+        }
+        if (AH == 0x02) { SETAL(0); return; }    // shift flags
         return;
+    }
     case 0x1a: { uint32_t t = RD32(0x46c); ECX = (ECX & 0xffff0000u) | (t >> 16); EDX = (EDX & 0xffff0000u) | (t & 0xffff); SETAL(0); return; }
     case 0x03: case 0x01: return;
     }
