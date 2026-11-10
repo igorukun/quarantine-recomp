@@ -99,8 +99,21 @@ static double bios_tick_acc;
 int sys_irq_waiting(void) { return timer_ticks_owed || kbq_r != kbq_w; }
 static int kb_hold(void);
 int sys_next_irq(void) {
-    if (timer_ticks_owed && !(pic_mask & 1)) { timer_ticks_owed--; return 8; }
-    if (kbq_r != kbq_w && !(pic_mask & 2) && !kb_hold()) { kb_last = kbq[kbq_r]; kbq_r = (kbq_r + 1) & (KBQ - 1); return 9; }
+    if (timer_ticks_owed && !(pic_mask & 1)) {
+        timer_ticks_owed--;
+        return 8;
+    }
+    if (kbq_r != kbq_w && !(pic_mask & 2)) {
+        uint8_t next_sc = kbq[kbq_r];
+
+        // 0xE0 (префикс расширенных клавиш) и отпускания — сразу
+        // Нажатия — через kb_hold
+        if (next_sc == 0xe0 || (next_sc & 0x80) || !kb_hold()) {
+            kb_last = next_sc;
+            kbq_r = (kbq_r + 1) & (KBQ - 1);
+            return 9;
+        }
+    }
     return -1;
 }
 
